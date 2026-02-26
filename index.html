@@ -518,7 +518,14 @@ function loadWeightsThen(callback) {
 
   const script = document.createElement('script');
   script.src = 'weights.js';
-  script.onload = () => { weightsLoaded = true; callback(); };
+  script.onload = () => {
+    weightsLoaded = true;
+    // Decode weights now that weights.js is loaded
+    for (const [k, b64] of Object.entries(W_B64)) W[k] = b64F32(b64, W_SHAPES[k]);
+    scStd  = b64F32(SC_B64.std,  [151]).data;
+    scMean = b64F32(SC_B64.mean, [151]).data;
+    callback();
+  };
   script.onerror = () => alert('Could not load weights.js — make sure it is in the same folder.');
   document.head.appendChild(script);
 }
@@ -530,10 +537,9 @@ function b64F32(b64, shape) {
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   return { data: new Float32Array(buf.buffer), rows: shape[0], cols: shape.length > 1 ? shape[1] : 1 };
 }
-const W = {};
-for (const [k, b64] of Object.entries(W_B64)) W[k] = b64F32(b64, W_SHAPES[k]);
-const scStd  = b64F32(SC_B64.std,  [151]).data;
-const scMean = b64F32(SC_B64.mean, [151]).data;
+let W = {};
+let scStd, scMean;
+
 
 // ═══════════════════════════════════════════════════
 //  NEURAL NETWORK FORWARD PASS
