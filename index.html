@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pavement Differential Deflection and Dowel Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── Reset & base ───────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f0f4f8;
+  color: #2d3748;
+  min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.app-header {
+  background: #1a365d;
+  color: white;
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.app-header .badge {
+  background: #3182ce;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.app-header h1 { font-size: 18px; font-weight: 700; line-height: 1.2; }
+.app-header p  { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+/* ── Main layout ─────────────────────────────────────── */
+.main-wrap {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ── Panel card ──────────────────────────────────────── */
+.card {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.09);
+  overflow: hidden;
+}
+.card-header {
+  background: #ebf4ff;
+  border-bottom: 2px solid #3182ce;
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #2b6cb0;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.card-body { padding: 14px 16px; }
+
+/* ── Input sections ──────────────────────────────────── */
+.input-section { margin-bottom: 14px; }
+.input-section:last-child { margin-bottom: 0; }
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #718096;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.input-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  align-items: center;
+}
+.input-grid label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+}
+.input-grid input {
+  width: 100px;
+  padding: 5px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #2d3748;
+  background: #f7fafc;
+  text-align: right;
+  transition: border-color .15s;
+}
+.input-grid input:focus { outline: none; border-color: #3182ce; background: white; }
+
+/* ── Run button ──────────────────────────────────────── */
+.btn-run {
+  width: 100%;
+  padding: 13px;
+  margin-top: 14px;
+  background: #2b6cb0;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .5px;
+  transition: background .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 2px 6px rgba(43,108,176,0.35);
+}
+.btn-run:hover  { background: #2c5282; box-shadow: 0 4px 10px rgba(43,108,176,0.4); transform: translateY(-1px); }
+.btn-run:active { transform: translateY(0); box-shadow: none; }
+
+/* ── Computed intermediates ──────────────────────────── */
+.fict-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.fict-item {
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.fict-item .fi-label { font-size: 10px; color: #975a16; font-weight: 600; margin-bottom: 2px; }
+.fict-item .fi-value { font-size: 14px; font-weight: 700; color: #744210; font-variant-numeric: tabular-nums; }
+.fict-item.blue { background: #ebf8ff; border-color: #90cdf4; }
+.fict-item.blue .fi-label { color: #2b6cb0; }
+.fict-item.blue .fi-value  { color: #1a365d; }
+
+/* ── Canvas visualizer ───────────────────────────────── */
+.viz-wrap {
+  background: #fdfdfd;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: auto;
+  text-align: center;
+  padding: 12px;
+  margin-top: 12px;
+}
+#slabCanvas { display: block; margin: auto; }
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #4a5568; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── Right panel ─────────────────────────────────────── */
+.right-col { display: flex; flex-direction: column; gap: 16px; }
+
+/* Loading bar */
+.loading-bar {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #3182ce, transparent);
+  background-size: 200%;
+  animation: sweep 1s infinite linear;
+  display: none;
+  border-radius: 2px;
+  margin: 6px 0 0;
+}
+.loading-bar.on { display: block; }
+@keyframes sweep { 0%{background-position:200%} 100%{background-position:-200%} }
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #e2e8f0;
+  background: #f7fafc;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden;
+}
+.tab-btn {
+  padding: 11px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: #718096;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn.active { color: #2b6cb0; border-bottom-color: #2b6cb0; background: white; }
+.tab-btn:hover:not(.active) { color: #4a5568; background: #edf2f7; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Empty state */
+.empty-state {
+  padding: 56px 20px;
+  text-align: center;
+  color: #a0aec0;
+}
+.empty-state .ei { font-size: 44px; margin-bottom: 12px; opacity: .5; }
+.empty-state h3  { font-size: 16px; font-weight: 700; color: #718096; margin-bottom: 6px; }
+.empty-state p   { font-size: 13px; max-width: 300px; margin: auto; line-height: 1.5; }
+
+/* Chart */
+.chart-outer { padding: 18px 18px 10px; }
+.chart-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.stat-chip {
+  background: #ebf8ff;
+  border: 1px solid #90cdf4;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #2b6cb0;
+  font-weight: 600;
+}
+.stat-chip b { color: #1a365d; }
+.chart-canvas-wrap { position: relative; height: 320px; }
+
+/* Table */
+.tbl-wrap { overflow: auto; max-height: 420px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  position: sticky; top: 0;
+  background: #2b6cb0; color: white;
+  padding: 9px 14px; text-align: left;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  white-space: nowrap;
+}
+tbody td { padding: 7px 14px; border-bottom: 1px solid #e2e8f0; color: #2d3748; }
+tbody tr:nth-child(even) td { background: #f7fafc; }
+tbody tr:hover td { background: #ebf8ff; }
+.bar-cell { width: 130px; }
+.mini-bar { height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+.mini-fill { height: 100%; background: linear-gradient(90deg, #3182ce, #63b3ed); border-radius: 3px; }
+.neg { color: #c53030; }
+
+/* Export btn */
+.btn-export {
+  display: none;
+  margin: 8px 16px 12px;
+  padding: 7px 16px;
+  background: white;
+  border: 1px solid #3182ce;
+  border-radius: 6px;
+  color: #3182ce;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-export:hover { background: #ebf8ff; }
+
+@media (max-width: 860px) {
+  .main-wrap { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="badge">FEM · NN</div>
+  <div>
+    <h1>Pavement Differential Deflection and Dowel Analyzer</h1>
+    <p>Physical parameters → Neural network prediction → Differential deflection profile → Dowel force</p>
+  </div>
+</div>
+
+<div class="main-wrap">
+
+  <!-- ══ LEFT COLUMN: Inputs ══════════════════════════════════ -->
+  <div>
+    <div class="card">
+      <div class="card-header">Pavement Input Parameters</div>
+      <div class="card-body">
+
+        <div class="input-section">
+          <div class="section-label">Slab &amp; Subgrade</div>
+          <div class="input-grid">
+            <label>Thickness (in)</label>
+            <input type="number" id="thickness" value="6" class="L">
+            <label>Elastic Modulus (psi)</label>
+            <input type="number" id="modulus" value="4000000" class="L">
+            <label>Poisson's Ratio</label>
+            <input type="number" id="poisson" step="0.01" value="0.15" class="L">
+            <label>Subgrade Modulus (pci)</label>
+            <input type="number" id="subgrade" value="100" class="L">
+          </div>
+        </div>
+
+        <div class="input-section">
+          <div class="section-label">Dowel Configuration</div>
+          <div class="input-grid">
+            <label>Diameter (in)</label>
+            <input type="number" id="dowel_dia" step="0.01" value="1.5" class="L">
+            <label>Edge Distance (in)</label>
+            <input type="number" id="edge_dist" value="6" class="L">
+            <label>Bar Spacing (in)</label>
+            <input type="number" id="dowel_spacing" value="12" class="L">
+            <label>Support Modulus (pci)</label>
+            <input type="number" id="dowel_support" value="500000" class="L">
+            <label>Joint Width (in)</label>
+            <input type="number" id="joint_width" step="0.01" value="0.1" class="L">
+          </div>
+        </div>
+
+        <div class="input-section">
+          <div class="section-label">Wheel Load</div>
+          <div class="input-grid">
+            <label>Load (lb)</label>
+            <input type="number" id="load" value="2500" class="L">
+            <label>Edge Distance (in)</label>
+            <input type="number" id="wheel_edge_dist" value="12" class="L">
+            <label>Wheel Spacing (in)</label>
+            <input type="number" id="wheel_spacing" value="12" class="L">
+            <label>Contact Width (in)</label>
+            <input type="number" id="wheel_width" value="1" class="L">
+            <label>Contact Length (in)</label>
+            <input type="number" id="wheel_length" value="6" class="L">
+          </div>
+        </div>
+
+        <button class="btn-run" onclick="runAnalysis()">▶ RUN PAVEMENT ANALYSIS</button>
+      </div>
+    </div>
+
+    <!-- Computed intermediates -->
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">Computed Parameters</div>
+      <div class="card-body">
+        <div class="section-label" style="margin-bottom:8px">Structural</div>
+        <div class="fict-grid" style="margin-bottom:10px">
+          <div class="fict-item blue" id="fi-l">
+            <div class="fi-label">Radius of Rel. Stiffness (l)</div>
+            <div class="fi-value" id="fv-l">—</div>
+          </div>
+          <div class="fict-item blue" id="fi-ds">
+            <div class="fi-label">Dowel Stiffness (lb/in)</div>
+            <div class="fi-value" id="fv-ds">—</div>
+          </div>
+        </div>
+        <div class="section-label" style="margin-bottom:8px">NN Inputs (Fictitious Parameters)</div>
+        <div class="fict-grid">
+          <div class="fict-item">
+            <div class="fi-label">Dist. from Edge</div>
+            <div class="fi-value" id="fv-dist">—</div>
+          </div>
+          <div class="fict-item">
+            <div class="fi-label">Wheel Length</div>
+            <div class="fi-value" id="fv-len">—</div>
+          </div>
+          <div class="fict-item">
+            <div class="fi-label">Wheel Spacing</div>
+            <div class="fi-value" id="fv-spc">—</div>
+          </div>
+          <div class="fict-item">
+            <div class="fi-label">IdowFirst</div>
+            <div class="fi-value" id="fv-idf">—</div>
+          </div>
+          <div class="fict-item">
+            <div class="fi-label">IdowSace</div>
+            <div class="fi-value" id="fv-ids">—</div>
+          </div>
+          <div class="fict-item">
+            <div class="fi-label">Fictitious Diameter</div>
+            <div class="fi-value" id="fv-dia">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slab visualizer -->
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">Plan View — Slab &amp; Load</div>
+      <div class="card-body" style="padding:10px">
+        <div class="viz-wrap">
+          <canvas id="slabCanvas"></canvas>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#dfe6e9;border:1px solid #2c3e50"></div>Concrete Slab</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#95a5a6"></div>Dowel Bar (18")</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(192,57,43,0.8)"></div>Wheel Footprint</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT COLUMN: Results ════════════════════════════════ -->
+  <div class="right-col">
+    <div class="card">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('plot')">DEFLECTION PROFILE</button>
+        <button class="tab-btn" onclick="switchTab('table')">DATA TABLE</button>
+        <button class="tab-btn" onclick="switchTab('params')">SCALE PARAMETERS</button>
+      </div>
+
+      <div class="loading-bar" id="lbar"></div>
+
+      <!-- PLOT tab -->
+      <div class="tab-panel active" id="tp-plot">
+        <div id="empty-plot" class="empty-state">
+          <div class="ei">📐</div>
+          <h3>No results yet</h3>
+          <p>Enter pavement parameters and click <strong>Run Pavement Analysis</strong> to compute the 151-point deflection profile using the trained neural network.</p>
+        </div>
+        <div id="chart-panel" style="display:none">
+          <div class="chart-outer">
+            <div class="chart-stats">
+              <div class="stat-chip">Max: <b id="s-max">—</b></div>
+              <div class="stat-chip">Min: <b id="s-min">—</b></div>
+              <div class="stat-chip">Peak @ position <b id="s-peak">—</b></div>
+              <div class="stat-chip">l = <b id="s-l">—</b> in</div>
+            </div>
+            <div class="chart-canvas-wrap">
+              <canvas id="defChart"></canvas>
+            </div>
+            <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;">
+              <div style="font-size:11px;font-weight:700;color:#718096;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">
+                Loads Transmitted by Dowels
+              </div>
+              <div style="position:relative;height:220px;">
+                <canvas id="dowelChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE tab -->
+      <div class="tab-panel" id="tp-table">
+        <div id="empty-tbl" class="empty-state">
+          <div class="ei">📋</div>
+          <h3>No results yet</h3>
+          <p>Run the analysis to populate this table.</p>
+        </div>
+        <div class="tbl-wrap" id="tbl-wrap" style="display:none">
+          <table>
+            <thead><tr><th>Position</th><th>Deflection (in)</th><th>Relative Magnitude</th></tr></thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SCALE PARAMETERS tab -->
+      <div class="tab-panel" id="tp-params">
+        <div id="empty-params" class="empty-state">
+          <div class="ei">⚖️</div>
+          <h3>No results yet</h3>
+          <p>Run the analysis to compute scale parameters.</p>
+        </div>
+        <div id="params-panel" style="display:none; padding:28px 24px;">
+          <div style="display:grid; gap:20px; max-width:560px; margin:0 auto;">
+
+            <div style="background:#ebf8ff; border:1px solid #90cdf4; border-radius:10px; padding:22px 24px;">
+              <div style="font-size:11px; font-weight:700; color:#2b6cb0; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">Width² — Normalized Contact Width</div>
+              <div style="font-size:36px; font-weight:700; color:#1a365d; font-variant-numeric:tabular-nums; margin-bottom:10px;" id="pv-width2">—</div>
+              <div style="font-size:12px; color:#4a5568; line-height:1.7; border-top:1px solid #bee3f8; padding-top:10px;">
+                <code style="background:#dbeafe; border-radius:4px; padding:2px 6px; font-size:11px;">
+                  width² = W-Width &divide; l &times; 29.296
+                </code><br><br>
+                Normalizes the wheel contact width by the radius of relative stiffness,
+                scaled to the fictitious coordinate system (c&nbsp;=&nbsp;29.296).
+              </div>
+            </div>
+
+            <div style="background:#fffaf0; border:1px solid #fbd38d; border-radius:10px; padding:22px 24px;">
+              <div style="font-size:11px; font-weight:700; color:#975a16; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">Corr — Load Correction Factor</div>
+              <div style="font-size:36px; font-weight:700; color:#744210; font-variant-numeric:tabular-nums; margin-bottom:10px;" id="pv-corr">—</div>
+              <div style="font-size:12px; color:#4a5568; line-height:1.7; border-top:1px solid #feebc8; padding-top:10px;">
+                <code style="background:#fef3c7; border-radius:4px; padding:2px 6px; font-size:11px;">
+                  corr = (Load &divide; 2500) &times; (100 &divide; k) &times; 29.296² &divide; l²
+                </code><br><br>
+                Scales the applied wheel load relative to the reference load (2500&nbsp;lb),
+                subgrade modulus, and the fictitious area (c²/l²).
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-export" id="btn-exp" onclick="exportCSV()">↓ Export CSV</button>
+    </div>
+  </div>
+
+</div><!-- /main-wrap -->
+
+<script>
+// ═══════════════════════════════════════════════════
+//  EMBEDDED MODEL WEIGHTS
+// ═══════════════════════════════════════════════════
+let weightsLoaded = false;
+
+function loadWeightsThen(callback) {
+  if (weightsLoaded) { callback(); return; }
+
+  const script = document.createElement('script');
+  script.src = 'weights.js';
+  script.onload = () => { weightsLoaded = true; callback(); };
+  script.onerror = () => alert('Could not load weights.js — make sure it is in the same folder.');
+  document.head.appendChild(script);
+}
+// ═══════════════════════════════════════════════════
+//  DECODE WEIGHTS AT STARTUP
+// ═══════════════════════════════════════════════════
+function b64F32(b64, shape) {
+  const bin = atob(b64), buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return { data: new Float32Array(buf.buffer), rows: shape[0], cols: shape.length > 1 ? shape[1] : 1 };
+}
+const W = {};
+for (const [k, b64] of Object.entries(W_B64)) W[k] = b64F32(b64, W_SHAPES[k]);
+const scStd  = b64F32(SC_B64.std,  [151]).data;
+const scMean = b64F32(SC_B64.mean, [151]).data;
+
+// ═══════════════════════════════════════════════════
+//  NEURAL NETWORK FORWARD PASS
+// ═══════════════════════════════════════════════════
+function matvec(mat, vec, bias) {
+  const out = new Float32Array(mat.rows);
+  for (let r = 0; r < mat.rows; r++) {
+    let s = bias.data[r], off = r * mat.cols;
+    for (let c = 0; c < mat.cols; c++) s += mat.data[off + c] * vec[c];
+    out[r] = s;
+  }
+  return out;
+}
+function bn(x, wt, bi, mn, vr, eps=1e-5) {
+  const o = new Float32Array(x.length);
+  for (let i = 0; i < x.length; i++)
+    o[i] = wt.data[i] * (x[i] - mn.data[i]) / Math.sqrt(vr.data[i] + eps) + bi.data[i];
+  return o;
+}
+function relu(x) { const o = new Float32Array(x.length); for (let i=0;i<x.length;i++) o[i]=x[i]>0?x[i]:0; return o; }
+
+const FMIN = [0,1,15,2,2,0], FMAX = [33,12,90,8,8,5];
+
+function nnPredict(raw6) {
+  const x = new Float32Array(6);
+  for (let i=0;i<6;i++) x[i] = Math.min(1,Math.max(0,(raw6[i]-FMIN[i])/(FMAX[i]-FMIN[i])));
+  let h = relu(bn(matvec(W.W0,x,W.b0),         W.bn0_w,W.bn0_b,W.bn0_m,W.bn0_v));
+  h =     relu(bn(matvec(W.W1,h,W.b1),         W.bn1_w,W.bn1_b,W.bn1_m,W.bn1_v));
+  h =     relu(bn(matvec(W.W2,h,W.b2),         W.bn2_w,W.bn2_b,W.bn2_m,W.bn2_v));
+  h =     relu(bn(matvec(W.W3,h,W.b3),         W.bn3_w,W.bn3_b,W.bn3_m,W.bn3_v));
+  const ys = matvec(W.W4, h, W.b4);
+  const out = new Float32Array(151);
+  for (let i=0;i<151;i++) out[i] = ys[i]*scStd[i]+scMean[i];
+  return out;
+}
+
+// ═══════════════════════════════════════════════════
+//  PAVEMENT CALCULATIONS
+// ═══════════════════════════════════════════════════
+function calcL() {
+  const h=+id('thickness').value, E=+id('modulus').value,
+        mu=+id('poisson').value,  k=+id('subgrade').value;
+  if (!h||!E||!k) return 1;
+  return Math.pow((E*Math.pow(h,3))/(12*k*(1-mu*mu)), 0.25);
+}
+
+function calcFictitious(l) {
+  const c = 29.296;
+  const k     = +id('subgrade').value;
+  const dDia  = +id('dowel_dia').value;
+  const dEdge = +id('edge_dist').value;
+  const dSpc  = +id('dowel_spacing').value;
+  const Ks    = +id('dowel_support').value;
+  const zjt   = +id('joint_width').value;
+  const wEdge = +id('wheel_edge_dist').value;
+  const wLen  = +id('wheel_length').value;
+  const wSpc  = +id('wheel_spacing').value;
+
+  const Es=30000000, nu_s=0.3, Gs=Es/(2*(1+nu_s));
+  const I_eff = 0.9*(Math.PI*Math.pow(dDia,4)/64);
+  const A_eff = 0.9*(Math.PI*dDia*dDia/4);
+  const beta  = Math.pow((Ks*dDia)/(4*Es*I_eff), 0.25);
+  const phi   = (12*Es*I_eff)/(Gs*A_eff*zjt*zjt);
+  const term1 = (2+beta*zjt)/(2*Math.pow(beta,3)*Es*I_eff);
+  const term2 = (zjt*zjt*zjt/(12*Es*I_eff))*(1+phi);
+  const dStiff  = 1/(term1+term2);
+  const dStiff2 = (dStiff*100*c*c)/(k*l*l);
+
+  return {
+    l,
+    dStiff,
+    dist:  (wEdge/l)*c,
+    len:   (wLen/l)*c,
+    spc:   (wSpc/l)*c,
+    idf:   (dEdge/l*c/2)+1,
+    ids:   (dSpc/l*c/2),
+    dia:   0.001058*Math.pow(dStiff2, 0.562509)
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  SLAB CANVAS DRAW
+// ═══════════════════════════════════════════════════
+function drawSlab(l) {
+  const canvas = id('slabCanvas'), ctx = canvas.getContext('2d');
+  const slabIn = 10*l, ppi = 420/slabIn;
+  const slabPx = slabIn*ppi, gap=8, mg=40;
+  canvas.width  = slabPx+mg*2;
+  canvas.height = slabPx*2+gap+mg*2;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Slabs
+  const slabBY = mg+slabPx+gap;
+  ctx.fillStyle='#dfe6e9'; ctx.strokeStyle='#2c3e50'; ctx.lineWidth=2;
+  ctx.fillRect(mg,mg,slabPx,slabPx);   ctx.strokeRect(mg,mg,slabPx,slabPx);
+  ctx.fillRect(mg,slabBY,slabPx,slabPx); ctx.strokeRect(mg,slabBY,slabPx,slabPx);
+
+  // Dowels
+  const dDiaPx     = (+id('dowel_dia').value)*ppi;
+  const dEdgePx    = (+id('edge_dist').value)*ppi;
+  const dSpacingPx = (+id('dowel_spacing').value)*ppi;
+  const dLenPx     = 18*ppi;
+  ctx.fillStyle='#95a5a6'; ctx.strokeStyle='#7f8c8d'; ctx.lineWidth=1;
+  for (let x=mg+dEdgePx; x<=mg+slabPx; x+=dSpacingPx) {
+    const dy = (mg+slabPx)-(dLenPx/2)+(gap/2);
+    ctx.fillRect(x-dDiaPx/2, dy, dDiaPx, dLenPx);
+    ctx.strokeRect(x-dDiaPx/2, dy, dDiaPx, dLenPx);
+  }
+
+  // Wheels
+  const wW  = (+id('wheel_width').value)*ppi;
+  const wL  = (+id('wheel_length').value)*ppi;
+  const wEP = (+id('wheel_edge_dist').value)*ppi;
+  const wSP = (+id('wheel_spacing').value)*ppi;
+  ctx.fillStyle='rgba(192,57,43,0.8)';
+  ctx.fillRect(mg+wEP, slabBY, wW, wL);
+  ctx.fillRect(mg+wEP+wSP+wW, slabBY, wW, wL);
+
+  // Labels
+  ctx.fillStyle='#636e72'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('Slab 1 (Loaded)', mg+slabPx/2, mg-6);
+  ctx.fillText('Slab 2 (Receiving)', mg+slabPx/2, slabBY-6);
+}
+
+// ═══════════════════════════════════════════════════
+//  CHART
+// ═══════════════════════════════════════════════════
+let chart = null;
+function updateChart(vals, l) {
+  // x-axis values: (x-1) × l / 29.296 × 2  where x runs 1→151
+  const labels = Array.from({length:151}, (_,i) => ((i) * l / 29.296 * 2).toFixed(4));
+  const ctx = id('defChart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'Differential Deflection',
+        data: Array.from(vals),
+        borderColor:'#2b6cb0',
+        borderWidth:1.8,
+        pointRadius:0,
+        pointHoverRadius:4,
+        fill:{target:'origin', above:'rgba(49,130,206,0.07)', below:'rgba(197,48,48,0.07)'},
+        tension:0.3
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{duration:500, easing:'easeOutQuart'},
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1a365d', borderColor:'#2b6cb0', borderWidth:1,
+          titleColor:'#90cdf4', bodyColor:'#e2e8f0',
+          titleFont:{size:11}, bodyFont:{family:'monospace', size:12},
+          callbacks:{
+            title: i=>`Distance ${i[0].label} in`,
+            label: i=>`  ${i.raw.toExponential(5)}`
+          }
+        }
+      },
+      scales:{
+        x:{
+          title:{display:true,text:'Distance from the edge (in)',color:'#718096',font:{size:11}},
+          grid:{color:'rgba(226,232,240,0.8)'},
+          ticks:{color:'#718096', font:{size:10}, maxTicksLimit:16, maxRotation:0}
+        },
+        y:{
+          title:{display:true,text:'Differential deflections',color:'#718096',font:{size:11}},
+          grid:{color:'rgba(226,232,240,0.8)'},
+          ticks:{color:'#718096', font:{family:'monospace',size:10}, callback:v=>v.toExponential(2)}
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  DOWEL DEFLECTION CHART
+// ═══════════════════════════════════════════════════
+let dowelChart = null;
+
+// Linear interpolation on the deflection profile.
+// xPhys: physical distance from edge (in).
+// xAxis[i] = (i) * l / 29.296 * 2  = physical x of profile point i.
+function interpDeflection(vals, xPhys, l) {
+  const dx = l / 29.296 * 2;           // spacing between consecutive profile points (in)
+  const fi = xPhys / dx;               // fractional index
+  const i0 = Math.floor(fi);
+  const i1 = i0 + 1;
+  if (i0 < 0) return vals[0];
+  if (i1 >= 151) return vals[150];
+  const t = fi - i0;
+  return vals[i0] * (1 - t) + vals[i1] * t;
+}
+
+function updateDowelChart(vals, l, fict) {
+  // Dowel positions in physical inches: edge_dist, edge_dist+dSpacing, ...
+  const dEdge   = +id('edge_dist').value;
+  const dSpacing = +id('dowel_spacing').value;
+
+  // Profile x-extent in physical inches: index 150 -> 150 * 2l/29.296
+  const xMax = 150 * l / 29.296 * 2;
+
+  const dowelX = [];   // physical distances (in)
+  const dowelY = [];   // loads transmitted (lb)
+
+  let xPos = dEdge;
+  while (xPos <= xMax + 1e-9) {
+    dowelX.push(+xPos.toFixed(4));
+    dowelY.push(interpDeflection(vals, xPos, l) * fict.dStiff);
+    xPos += dSpacing;
+  }
+
+  // Store for CSV export
+  lastDowelX = dowelX.slice();
+  lastDowelY = dowelY.slice();
+
+  const ctx2 = id('dowelChart').getContext('2d');
+  if (dowelChart) dowelChart.destroy();
+
+  dowelChart = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: dowelX,
+      datasets: [{
+        label: 'Load transmitted by dowel',
+        data: dowelY,
+        backgroundColor: dowelY.map(v => v >= 0 ? 'rgba(43,108,176,0.75)' : 'rgba(197,48,48,0.75)'),
+        borderColor:     dowelY.map(v => v >= 0 ? '#2b6cb0' : '#c53030'),
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a365d', borderColor: '#2b6cb0', borderWidth: 1,
+          titleColor: '#90cdf4', bodyColor: '#e2e8f0',
+          titleFont: { size: 11 }, bodyFont: { family: 'monospace', size: 12 },
+          callbacks: {
+            title: items => `Dowel @ ${items[0].label} in`,
+            label: item  => `  ${item.raw.toExponential(5)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Distance from edge (in)', color: '#718096', font: { size: 11 } },
+          grid:  { color: 'rgba(226,232,240,0.8)' },
+          ticks: { color: '#718096', font: { size: 10 }, maxRotation: 45 }
+        },
+        y: {
+          title: { display: true, text: 'Load, lb', color: '#718096', font: { size: 11 } },
+          grid:  { color: 'rgba(226,232,240,0.8)' },
+          ticks: { color: '#718096', font: { family: 'monospace', size: 10 }, callback: v => v.toFixed(1) }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  TABLE
+// ═══════════════════════════════════════════════════
+function updateTable(vals) {
+  const tbody = id('tbl-body');
+  tbody.innerHTML='';
+  const mx = Math.max(...Array.from(vals).map(Math.abs));
+  for (let i=0;i<vals.length;i++) {
+    const v=vals[i], pct=mx>0?Math.abs(v)/mx*100:0;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td>
+      <td class="${v<0?'neg':''}">${v.toExponential(6)}</td>
+      <td class="bar-cell"><div class="mini-bar"><div class="mini-fill" style="width:${pct.toFixed(1)}%"></div></div></td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  MAIN ANALYSIS RUNNER
+// ═══════════════════════════════════════════════════
+let lastVals=null, lastFict=null, lastDowelX=null, lastDowelY=null;
+
+function runAnalysis() {
+  const lbar=id('lbar');
+  lbar.classList.add('on');
+  
+   loadWeightsThen(() => {          // ← weights guaranteed available here
+   
+   setTimeout(()=>{
+    const l    = calcL();
+    const fict = calcFictitious(l);
+    lastFict   = fict;
+
+    // Update computed parameters display
+    id('fv-l').textContent    = l.toFixed(4)+' in';
+    id('fv-ds').textContent   = fict.dStiff.toLocaleString(undefined,{maximumFractionDigits:0});
+    id('fv-dist').textContent = fict.dist.toFixed(4);
+    id('fv-len').textContent  = fict.len.toFixed(4);
+    id('fv-spc').textContent  = fict.spc.toFixed(4);
+    id('fv-idf').textContent  = fict.idf.toFixed(4);
+    id('fv-ids').textContent  = fict.ids.toFixed(4);
+    id('fv-dia').textContent  = fict.dia.toFixed(6);
+
+    // Draw slab
+    drawSlab(l);
+
+    // ── New deflection procedure ──────────────────────────────────────────
+    // width2 = wheel contact width normalised to fictitious coordinates
+    const width2 = (+id('wheel_width').value) / l * 29.296;
+    // n = smallest integer >= width2
+    const n = Math.ceil(width2);
+    // fractional weight for the last pass
+    const lastScale = width2 - (n - 1);   // value in (0, 1]
+
+    const combined = new Float32Array(151);  // accumulator
+
+    for (let pass = 0; pass < n; pass++) {
+      // Each pass shifts Dist. from Edge by +pass integer steps
+      const nnIn = [
+        fict.dist + pass,
+        fict.len,
+        fict.spc,
+        fict.idf,
+        fict.ids,
+        fict.dia
+      ];
+      const profile = nnPredict(nnIn);
+      const weight  = (pass < n - 1) ? 1.0 : lastScale;
+      for (let i = 0; i < 151; i++) combined[i] += profile[i] * weight;
+    }
+
+    // 1) Multiply total deflections by Load Correction Factor
+    const corr = (+id('load').value) / 2500 * 100 / (+id('subgrade').value)
+                 * 29.296 * 29.296 / (l * l);
+    for (let i = 0; i < 151; i++) combined[i] *= corr / width2;
+
+    const vals = combined;
+    lastVals   = vals;
+
+    // Stats
+    const arr  = Array.from(vals);
+    const maxV = Math.max(...arr), minV = Math.min(...arr);
+    const peakI= arr.indexOf(maxV)+1;
+    id('s-max').textContent  = maxV.toExponential(4);
+    id('s-min').textContent  = minV.toExponential(4);
+    id('s-peak').textContent = peakI;
+    id('s-l').textContent    = l.toFixed(3);
+
+    // Show results
+    id('empty-plot').style.display='none';
+    id('chart-panel').style.display='block';
+    updateChart(vals, l);
+    updateDowelChart(vals, l, fict);
+
+    id('empty-tbl').style.display='none';
+    id('tbl-wrap').style.display='block';
+    updateTable(vals);
+
+    id('btn-exp').style.display='inline-block';
+
+    // Scale parameters tab (corr already computed above)
+    id('pv-width2').textContent = width2.toFixed(6);
+    id('pv-corr').textContent   = corr.toFixed(6);
+    id('empty-params').style.display = 'none';
+    id('params-panel').style.display = 'block';
+
+    lbar.classList.remove('on');
+  }, 20);
+   });
+}
+
+// ═══════════════════════════════════════════════════
+//  LIVE UPDATE (canvas + intermediates only, no NN)
+// ═══════════════════════════════════════════════════
+function liveUpdate() {
+  const l = calcL();
+  const f = calcFictitious(l);
+  id('fv-l').textContent    = l.toFixed(4)+' in';
+  id('fv-ds').textContent   = f.dStiff.toLocaleString(undefined,{maximumFractionDigits:0});
+  id('fv-dist').textContent = f.dist.toFixed(4);
+  id('fv-len').textContent  = f.len.toFixed(4);
+  id('fv-spc').textContent  = f.spc.toFixed(4);
+  id('fv-idf').textContent  = f.idf.toFixed(4);
+  id('fv-ids').textContent  = f.ids.toFixed(4);
+  id('fv-dia').textContent  = f.dia.toFixed(6);
+  drawSlab(l);
+  // Hide all results — user must re-run analysis
+  id('chart-panel').style.display  = 'none';
+  id('empty-plot').style.display   = 'block';
+  id('tbl-wrap').style.display     = 'none';
+  id('empty-tbl').style.display    = 'block';
+  id('params-panel').style.display = 'none';
+  id('empty-params').style.display = 'block';
+  id('btn-exp').style.display      = 'none';
+  if (chart)      { chart.destroy();      chart      = null; }
+  if (dowelChart) { dowelChart.destroy(); dowelChart = null; }
+  lastVals = null; lastFict = null; lastDowelX = null; lastDowelY = null;
+}
+
+// ═══════════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════════
+function switchTab(name) {
+  const names = ['plot','table','params'];
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>
+    b.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  id('tp-'+name).classList.add('active');
+  if (name==='plot' && chart) chart.resize();
+}
+
+// ═══════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════
+function exportCSV() {
+  if (!lastVals) return;
+  const f=lastFict;
+  let csv=`# Pavement Differential Deflection and Dowel Analyzer\n`;
+  csv+=`# l=${f.l.toFixed(4)}, dist=${f.dist.toFixed(4)}, len=${f.len.toFixed(4)}, spc=${f.spc.toFixed(4)}, idf=${f.idf.toFixed(4)}, ids=${f.ids.toFixed(4)}, dia=${f.dia.toFixed(6)}\n`;
+  csv+=`\n# Deflection Profile\n`;
+  csv+=`position,x_distance_in,deflection\n`;
+  const dx = f.l / 29.296 * 2;
+  for (let i=0;i<lastVals.length;i++) {
+    const xPhys = (i * dx).toFixed(4);
+    csv+=`${i+1},${xPhys},${lastVals[i].toExponential(8)}\n`;
+  }
+  if (lastDowelX && lastDowelY) {
+    csv+=`\n# Dowel Forces\n`;
+    csv+=`dowel_number,distance_from_edge_in,force_lb\n`;
+    for (let j=0;j<lastDowelX.length;j++) {
+      csv+=`${j+1},${lastDowelX[j]},${lastDowelY[j].toFixed(4)}\n`;
+    }
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`pavement_analysis_l${f.l.toFixed(2)}.csv`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+function id(x) { return document.getElementById(x); }
+
+document.querySelectorAll('.L').forEach(inp=>inp.addEventListener('input', liveUpdate));
+window.onload = liveUpdate;
+</script>
+</body>
+</html>
